@@ -1,0 +1,21 @@
+{
+  "name": "games-organizer-bot",
+  "description": "Telegram bot that helps to manage sign-ups for game events",
+  "version": "0.0.1",
+  "main": "handler.js",
+  "type": "module",
+  "scripts": {
+    "serverless": "serverless",
+    "release": "serverless deploy",
+    "purge": "serverless remove",
+    "set-webhook": "telegraf -m setWebhook"
+  },
+  "dependencies": {
+    "serverless-http": "^3.2.0",
+    "telegraf": "^4.16.3"
+  },
+  "devDependencies": {
+    "serverless": "^3.28.1",
+    "serverless-dotenv-plugin": "^4.0.2"
+  }
+}

@@ -1,0 +1,11 @@
+# package directories
+node_modules
+
+# Serverless directories
+.serverless
+
+# secrets
+.env
+
+# IDE settings
+.idea
