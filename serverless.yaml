@@ -21,7 +21,7 @@ functions:
     handler: sync.handler
     events:
       - http:
-          path: /new-game
+          path: /sync-game
           method: post
 plugins:
   - serverless-dotenv-plugin
