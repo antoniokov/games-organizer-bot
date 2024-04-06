@@ -1,7 +1,7 @@
 import serverlessHttp from 'serverless-http';
 import { Telegraf } from 'telegraf';
 import express from 'express';
-import * as console from "node:console";
+import Fibery from 'fibery-unofficial';
 
 
 const app = express();
@@ -14,25 +14,48 @@ if (token === undefined) {
 
 const bot = new Telegraf(token);
 
+const fibery = new Fibery({
+    host: process.env.FIBERY_HOST,
+    token: process.env.FIBERY_TOKEN,
+})
+
 app.post('/sync-game', (req, res) => {
-    const { chatId, messageId, name, limit, participants, reserves } = req.body;
+    const { gameType, gameId, chatId, messageId, name, limit, participants, reserves } = req.body;
 
     const message = [
-        `* ${name}* \n*Limit*: ${limit} participants`,
-        `*Participants* \n${participants}`,
-        reserves ? `*Waitlist* \n${reserves}` : ''
-    ].join(`\n\n`);
+        `* ${name}*`,
+        limit ? `*Limit*: ${limit} participants` : null,
+        `\n*Participants* \n${participants || '(click ➕ to sign up)'}`,
+        reserves ? `\n*Waitlist* \n${reserves}` : null
+    ].join(`\n`);
 
     if(!messageId) {
         bot.telegram.sendMessage(chatId, message, { parse_mode: 'Markdown'} ).then((message) => {
-            console.log(message.message_id);
-            res.sendStatus(200);
+            if(!gameId || !gameType) {
+                res.status(500).send('Either gameId or gameType is missing');
+                return;
+            }
+
+            const [appName, typeName] = gameType.split('/');
+            fibery.entity.updateBatch([{
+                'type': gameType,
+                'entity': {
+                    'fibery/id': gameId,
+                    [`${appName}/Message ID`]: message.message_id.toString()
+                }
+            }]).then(() => {
+                res.sendStatus(200);
+            }).catch(err => {
+                console.error(err);
+                res.status(500).send('Failed to update the Game in Fibery');
+            });
+
         }).catch(err => {
             console.log(err);
             res.status(500).send('Failed to send message');
         });
     } else {
-        bot.telegram.editMessageText(chatId, messageId, undefined, message).then(() => {
+        bot.telegram.editMessageText(chatId, messageId, undefined, message, { parse_mode: 'Markdown'}).then(() => {
             res.sendStatus(200);
         }).catch(err => {
             console.log(err);
