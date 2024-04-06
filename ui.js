@@ -1,4 +1,4 @@
-import http from 'serverless-http';
+import serverlessHttp from 'serverless-http';
 import { Telegraf } from 'telegraf';
 
 const token = process.env.BOT_TOKEN;
@@ -9,7 +9,7 @@ if (token === undefined) {
 const bot = new Telegraf(token);
 
 // echo
-bot.on('message', ctx => ctx.reply(`Echo: ${ctx.message.text}`));
+bot.on('message', ctx => ctx.reply(`You said: ${ctx.message.text}`));
 
 // setup webhook
-export const echobot = http(bot.webhookCallback("/bot"));
+export const handler = serverlessHttp(bot.webhookCallback("/bot"));

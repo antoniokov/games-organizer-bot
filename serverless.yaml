@@ -11,12 +11,17 @@ provider:
   region: eu-central-1
 
 functions:
-  echo:
-    handler: handler.echobot
+  ui:
+    handler: ui.handler
     events:
       - http:
           path: /bot
           method: post
-
+  sync:
+    handler: sync.handler
+    events:
+      - http:
+          path: /new-game
+          method: post
 plugins:
   - serverless-dotenv-plugin
