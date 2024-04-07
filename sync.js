@@ -1,5 +1,5 @@
 import serverlessHttp from 'serverless-http';
-import { Telegraf } from 'telegraf';
+import {Telegraf, Markup} from 'telegraf';
 import express from 'express';
 import Fibery from 'fibery-unofficial';
 
@@ -20,7 +20,7 @@ const fibery = new Fibery({
 })
 
 app.post('/sync-game', (req, res) => {
-    const { gameType, gameId, chatId, messageId, name, limit, participants, reserves } = req.body;
+    const {gameType, gameId, chatId, messageId, name, limit, participants, reserves} = req.body;
 
     const message = [
         `* ${name}*`,
@@ -29,9 +29,15 @@ app.post('/sync-game', (req, res) => {
         reserves ? `\n*Waitlist* \n${reserves}` : null
     ].join(`\n`);
 
-    if(!messageId) {
-        bot.telegram.sendMessage(chatId, message, { parse_mode: 'Markdown'} ).then((message) => {
-            if(!gameId || !gameType) {
+    if (!messageId) {
+        bot.telegram.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('➕', 'SIGN_UP'),
+                Markup.button.callback('❌', 'OPT_OUT')
+            ])
+        }).then((message) => {
+            if (!gameId || !gameType) {
                 res.status(500).send('Either gameId or gameType is missing');
                 return;
             }
@@ -55,7 +61,13 @@ app.post('/sync-game', (req, res) => {
             res.status(500).send('Failed to send message');
         });
     } else {
-        bot.telegram.editMessageText(chatId, messageId, undefined, message, { parse_mode: 'Markdown'}).then(() => {
+        bot.telegram.editMessageText(chatId, messageId, undefined, message, {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+                Markup.button.callback('➕', 'SIGN_UP'),
+                Markup.button.callback('❌', 'OPT_OUT')
+            ])
+        }).then(() => {
             res.sendStatus(200);
         }).catch(err => {
             console.log(err);
