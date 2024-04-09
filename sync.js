@@ -17,7 +17,7 @@ const bot = new Telegraf(token);
 const fibery = new Fibery({
     host: process.env.FIBERY_HOST,
     token: process.env.FIBERY_TOKEN,
-})
+});
 
 app.post('/sync-game', (req, res) => {
     const {gameType, gameId, chatId, messageId, name, limit, participants, reserves} = req.body;
