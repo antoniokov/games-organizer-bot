@@ -47,7 +47,7 @@ app.post('/sync-game', (req, res) => {
                 'type': gameType,
                 'entity': {
                     'fibery/id': gameId,
-                    [`${appName}/Message ID`]: message.message_id.toString()
+                    [`${appName}/Telegram Message ID`]: message.message_id.toString()
                 }
             }]).then(() => {
                 res.sendStatus(200);

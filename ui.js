@@ -2,47 +2,79 @@ import serverlessHttp from 'serverless-http';
 import { Telegraf } from 'telegraf';
 import Fibery from 'fibery-unofficial';
 
-const token = process.env.BOT_TOKEN;
-if (token === undefined) {
-    throw new Error('Please provide BOT_TOKEN')
+const botToken = process.env.BOT_TOKEN;
+if (!botToken) {
+    throw new Error('Please provide BOT_TOKEN in .env file');
 }
 
-const bot = new Telegraf(token);
+const bot = new Telegraf(botToken);
+
+if(!process.env.FIBERY_HOST || !process.env.FIBERY_TOKEN) {
+    throw new Error('Please provide FIBERY_HOST and FIBERY_TOKEN in .env file');
+}
 
 const fibery = new Fibery({
     host: process.env.FIBERY_HOST,
     token: process.env.FIBERY_TOKEN,
 });
+const fiberyApp = process.env.FIBERY_APP || 'Organizer';
 
-bot.action('SIGN_UP', async (ctx) => {
-    const fiberyApp = process.env.FIBERY_APP;
-
-    // two parallel queries: for the Player (Telegram ID)
-    // and the Game (Message ID)
+const getOrCreatePlayer = async (userId) => {
     const players = await fibery.entity.query({
         'q/from': `${fiberyApp}/Players`,
-        'q/select': [
-            'fibery/id',
-            `${fiberyApp}/Name`,
-            `${fiberyApp}/First Name (TG)`,
-            `${fiberyApp}/Last Name (TG)`,
-            `${fiberyApp}/Username (TG)`,
+        'q/select': ['fibery/id'],
+        'q/where': ['=', [`${fiberyApp}/Telegram User ID`], '$user_id'],
+        'q/order-by': [
+            [['fibery/creation-date'], 'q/asc'],
+            [['fibery/rank'], 'q/asc']
         ],
-        'q/where': ['=', [`${fiberyApp}/Telegram ID`], '$id'],
         'q/limit': 1
-    }, { '$id': ctx.from.id.toString() });
+    }, { '$user_id': userId.toString() });
 
     if (players.length === 0) {
-        // create a Player
+        // TODO: create a Player
     }
 
-    const player = players[0];
-    const currentDate = new Date();
+    return players[0];
+};
 
+const getGame = async (chatId, messageId) => {
+    const games = await fibery.entity.query({
+        'q/from': `${fiberyApp}/Games`,
+        'q/select': ['fibery/id'],
+        'q/where': ['and',
+            ['=', [`${fiberyApp}/Telegram Chat ID`], '$chat_id'],
+            ['=', [`${fiberyApp}/Telegram Message ID`], '$message_id']
+        ],
+        'q/order-by': [
+            [['fibery/creation-date'], 'q/desc'],
+            [['fibery/rank'], 'q/asc']
+        ],
+        'q/limit': 1
+    }, {
+        '$chat_id': chatId.toString(),
+        '$message_id': messageId.toString()
+    });
+
+    if (games.length === 0) {
+        throw new Error('Game not found in Fibery');
+    }
+
+    return games[0];
+}
+
+bot.action('SIGN_UP', async (ctx) => {
+    const [player, game] = await Promise.all([
+        getOrCreatePlayer(ctx.callbackQuery.from.id),
+        getGame(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id)
+    ]);
+    // catch and inform user of the error if they can act on it
+
+    const currentDate = new Date();
     const signUp = await fibery.entity.createBatch([{
         'type': `${fiberyApp}/Sign-ups`,
         'entity': {
-            [`${fiberyApp}/Game`]: { 'fibery/id': '005734d0-f509-11ee-b3d9-6fdd149e4653' },
+            [`${fiberyApp}/Game`]: { 'fibery/id': game['fibery/id'] },
             [`${fiberyApp}/Player`]: { 'fibery/id': player['fibery/id'] },
             [`${fiberyApp}/Signed up at`]: currentDate.toISOString(),
         }
