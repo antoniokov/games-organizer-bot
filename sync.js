@@ -7,12 +7,12 @@ import Fibery from 'fibery-unofficial';
 const app = express();
 app.use(express.json());
 
-const token = process.env.BOT_TOKEN;
-if (token === undefined) {
+const botToken = process.env.BOT_TOKEN;
+if (!botToken) {
     throw new Error('Please provide BOT_TOKEN')
 }
 
-const bot = new Telegraf(token);
+const bot = new Telegraf(botToken);
 
 const fibery = new Fibery({
     host: process.env.FIBERY_HOST,
@@ -22,7 +22,22 @@ const fibery = new Fibery({
 const logAndReturnError = (res, code, error) => {
     console.error(error);
     return res.status(code).send(error);
-}
+};
+
+const buildMessageText = (game) => {
+    const name = `*${game.name || 'Untitled'}*`;
+
+    const place = game.address && game.googleMapsLink
+        ? `[${game.address}](${game.googleMapsLink})`
+        : game.address || game.googleMapsLink || null;
+
+    const limit = game.limit ? ` (max. ${game.limit})` : '';
+    const participantsHeader = `\n*Participants*${limit}:`;
+    const participants = `${game.participants || '(click ➕ to sign up)'}`;
+    const waitlist = game.reserves ? `\n*Waitlist* \n${game.reserves}` : null;
+
+    return [name, place, participantsHeader, participants, waitlist].filter(Boolean).join(`\n`);
+};
 
 app.post('/sync-game', async (req, res) => {
     const { telegram, game } = req.body;
@@ -30,13 +45,7 @@ app.post('/sync-game', async (req, res) => {
     if(!game) return logAndReturnError(res, 400, 'Game object is missing');
     if(!telegram) return logAndReturnError(res, 400, 'Telegram object is missing');
 
-    const messageText = [
-        `*${game.name || 'Untitled'}*`,
-        game.limit ? `*Limit*: ${game.limit} participants` : null,
-        `\n*Participants* \n${game.participants || '(click ➕ to sign up)'}`,
-        game.reserves ? `\n*Waitlist* \n${game.reserves}` : null
-    ].join(`\n`);
-
+    const messageText = buildMessageText(game);
     const keyboard = Markup.inlineKeyboard([
         Markup.button.callback('➕', 'SIGN_UP'),
         Markup.button.callback('❌', 'OPT_OUT')
