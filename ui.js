@@ -118,7 +118,7 @@ bot.action('SIGN_UP', async (ctx) => {
         }]);
     } catch (err) {
         console.error(err);
-        return await ctx.answerCbQuery(`Something went wrong 😬`);
+        return await ctx.answerCbQuery(`Something went wrong 😬\n${err}`);
     }
 
     return await ctx.answerCbQuery(`You've signed up 👌`);
@@ -153,7 +153,7 @@ bot.action('OPT_OUT', async (ctx) => {
         await fibery.entity.updateBatch(updates);
     } catch (err) {
         console.error(err);
-        return await ctx.answerCbQuery(`Something went wrong 😬`);
+        return await ctx.answerCbQuery(`Something went wrong 😬\n${err}`);
     }
 
     return await ctx.answerCbQuery(`You've opted out 👌`);
