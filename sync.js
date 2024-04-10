@@ -19,14 +19,22 @@ const fibery = new Fibery({
     token: process.env.FIBERY_TOKEN,
 });
 
+const logAndReturnError = (res, code, error) => {
+    console.error(error);
+    return res.status(code).send(error);
+}
+
 app.post('/sync-game', async (req, res) => {
-    const {gameType, gameId, chatId, messageId, name, limit, participants, reserves} = req.body;
+    const { telegram, game } = req.body;
+
+    if(!game) return logAndReturnError(res, 400, 'Game object is missing');
+    if(!telegram) return logAndReturnError(res, 400, 'Telegram object is missing');
 
     const messageText = [
-        `*${name}*`,
-        limit ? `*Limit*: ${limit} participants` : null,
-        `\n*Participants* \n${participants || '(click ➕ to sign up)'}`,
-        reserves ? `\n*Waitlist* \n${reserves}` : null
+        `*${game.name || 'Untitled'}*`,
+        game.limit ? `*Limit*: ${game.limit} participants` : null,
+        `\n*Participants* \n${game.participants || '(click ➕ to sign up)'}`,
+        game.reserves ? `\n*Waitlist* \n${game.reserves}` : null
     ].join(`\n`);
 
     const keyboard = Markup.inlineKeyboard([
@@ -34,49 +42,43 @@ app.post('/sync-game', async (req, res) => {
         Markup.button.callback('❌', 'OPT_OUT')
     ]);
 
-    if (!messageId) {
+    if (!telegram.messageId) {
         try {
-            const message = await bot.telegram.sendMessage(chatId, messageText, {
+            const message = await bot.telegram.sendMessage(telegram.chatId, messageText, {
                 parse_mode: 'Markdown',
                 ...keyboard
             });
 
-            if (!gameId || !gameType) {
-                res.status(400).send('Either gameId or gameType is missing');
-                return;
-            }
+            if(!game.type) return logAndReturnError(res, 400, `Can't set Message ID in Fibery: game Type is missing`);
+            if(!game.id) return logAndReturnError(res, 400, `Can't set Message ID in Fibery: game ID is missing`);
 
-            const [appName, typeName] = gameType.split('/');
+            const [appName, typeName] = game.type.split('/');
             try {
                 await fibery.entity.updateBatch([{
-                    'type': gameType,
+                    'type': game.type,
                     'entity': {
-                        'fibery/id': gameId,
+                        'fibery/id': game.id,
                         [`${appName}/Telegram Message ID`]: message.message_id.toString()
                     }
                 }]);
             } catch (err) {
-                console.error(err);
-                res.status(500).send('Failed to update the Game in Fibery');
-                return;
+                return logAndReturnError(res, 500, `Failed to update the Game in Fibery: ${err}`);
             }
 
             res.sendStatus(200);
         } catch (err) {
-            console.error(err);
-            res.status(500).send('Failed to send message to Telegram');
+            return logAndReturnError(res, 500, `Failed to send message to Telegram: ${err}`);
         }
     } else {
         try {
-            await bot.telegram.editMessageText(chatId, messageId, undefined, messageText, {
+            await bot.telegram.editMessageText(telegram.chatId, telegram.messageId, undefined, messageText, {
                 parse_mode: 'Markdown',
                 ...keyboard
             });
 
             res.sendStatus(200);
         } catch (err) {
-            console.error(err);
-            res.status(500).send('Failed to edit message in Telegram');
+            return logAndReturnError(res, 500, `Failed to edit message in Telegram: ${err}`);
         }
     }
 });
