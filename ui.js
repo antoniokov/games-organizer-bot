@@ -21,7 +21,7 @@ const fiberyApp = process.env.FIBERY_APP || 'Organizer';
 
 const getOrCreatePlayer = async (userId) => {
     const players = await fibery.entity.query({
-        'q/from': `${fiberyApp}/Players`,
+        'q/from': `${fiberyApp}/Player`,
         'q/select': { id: 'fibery/id' },
         'q/where': ['=', [`${fiberyApp}/Telegram User ID`], '$user_id'],
         'q/order-by': [
@@ -40,14 +40,16 @@ const getOrCreatePlayer = async (userId) => {
 
 const getGame = async (chatId, messageId) => {
     const games = await fibery.entity.query({
-        'q/from': `${fiberyApp}/Games`,
+        'q/from': `${fiberyApp}/Game`,
         'q/select': {
             id: 'fibery/id',
-            signUps: {
-                'q/from': `${fiberyApp}/Sign-ups`,
+            activeRegistrations: {
+                'q/from': `${fiberyApp}/Registrations`,
                 'q/select': {
-                    player: [`${fiberyApp}/Player`, 'fibery/id']
+                    id: 'fibery/id',
+                    playerId: [`${fiberyApp}/Player`, 'fibery/id']
                 },
+                'q/where': ['=', ['q/null?', [`${fiberyApp}/Opted out at`]], true],
                 'q/limit': 'q/no-limit'
             }
         },
@@ -72,6 +74,7 @@ const getGame = async (chatId, messageId) => {
     return games[0];
 }
 
+
 bot.action('SIGN_UP', async (ctx) => {
     const [player, game] = await Promise.all([
         getOrCreatePlayer(ctx.callbackQuery.from.id),
@@ -79,14 +82,14 @@ bot.action('SIGN_UP', async (ctx) => {
     ]);
     // TODO: catch and inform user of the error if they can act on it
 
-    const existingSignUps = game.signUps.filter(s => s.player === player.id);
-    if (existingSignUps.length > 0) {
+    const isRegistered = game.activeRegistrations.some(ar => ar.playerId === player.id);
+    if (isRegistered) {
         return await ctx.answerCbQuery(`You are already signed up 🤷`);
     }
 
     const currentDate = new Date();
-    const signUp = await fibery.entity.createBatch([{
-        'type': `${fiberyApp}/Sign-ups`,
+    const newRegistration = await fibery.entity.createBatch([{
+        'type': `${fiberyApp}/Registration`,
         'entity': {
             [`${fiberyApp}/Game`]: { 'fibery/id': game.id },
             [`${fiberyApp}/Player`]: { 'fibery/id': player.id },
@@ -97,5 +100,32 @@ bot.action('SIGN_UP', async (ctx) => {
     return await ctx.answerCbQuery(`You've signed up 👌`);
 });
 
-// setup webhook
+
+bot.action('OPT_OUT', async (ctx) => {
+    const [player, game] = await Promise.all([
+        getOrCreatePlayer(ctx.callbackQuery.from.id),
+        getGame(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id)
+    ]);
+    // TODO: catch and inform user of the error if they can act on it
+
+    const activeRegistrations =  game.activeRegistrations.filter(ar => ar.playerId === player.id);
+
+    if (activeRegistrations.length === 0) {
+        return await ctx.answerCbQuery(`You don't have any active registrations 🤷`);
+    }
+
+    const currentDate = new Date();
+    const updates = activeRegistrations.map(ar => ({
+        'type': `${fiberyApp}/Registration`,
+        'entity': {
+            'fibery/id': ar.id,
+            [`${fiberyApp}/Opted out at`]: currentDate.toISOString()
+        }
+    }));
+
+    const result = await fibery.entity.updateBatch(updates);
+    return await ctx.answerCbQuery(`You've opted out 👌`);
+});
+
+
 export const handler = serverlessHttp(bot.webhookCallback("/bot"));
