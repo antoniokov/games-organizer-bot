@@ -19,8 +19,8 @@ const fibery = new Fibery({
 });
 const fiberyApp = process.env.FIBERY_APP || 'Organizer';
 
-const getOrCreatePlayer = async (userId) => {
-    const players = await fibery.entity.query({
+const getOrCreatePlayer = async (id, firstName, lastName, username) => {
+    const existingPlayers = await fibery.entity.query({
         'q/from': `${fiberyApp}/Player`,
         'q/select': { id: 'fibery/id' },
         'q/where': ['=', [`${fiberyApp}/Telegram User ID`], '$user_id'],
@@ -29,13 +29,23 @@ const getOrCreatePlayer = async (userId) => {
             [['fibery/rank'], 'q/asc']
         ],
         'q/limit': 1
-    }, { '$user_id': userId.toString() });
+    }, { '$user_id': id.toString() });
 
-    if (players.length === 0) {
-        // TODO: create a Player
+    if (existingPlayers.length === 1) {
+        return existingPlayers[0];
+    } else {
+        const newPlayers = await fibery.entity.createBatch([{
+            'type': `${fiberyApp}/Player`,
+            'entity': {
+                [`${fiberyApp}/Telegram User ID`]: id.toString(),
+                [`${fiberyApp}/First Name (TG)`]: firstName,
+                [`${fiberyApp}/Last Name (TG)`]: lastName,
+                [`${fiberyApp}/Username (TG)`]: username
+            }
+        }]);
+
+        return { id: newPlayers[0]['fibery/id'] };
     }
-
-    return players[0];
 };
 
 const getGame = async (chatId, messageId) => {
@@ -76,9 +86,12 @@ const getGame = async (chatId, messageId) => {
 
 
 bot.action('SIGN_UP', async (ctx) => {
+    const user = ctx.callbackQuery.from;
+    const message = ctx.callbackQuery.message;
+
     const [player, game] = await Promise.all([
-        getOrCreatePlayer(ctx.callbackQuery.from.id),
-        getGame(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id)
+        getOrCreatePlayer(user.id, user.first_name, user.last_name, user.username),
+        getGame(message.chat.id, message.message_id)
     ]);
     // TODO: catch and inform user of the error if they can act on it
 
@@ -102,9 +115,12 @@ bot.action('SIGN_UP', async (ctx) => {
 
 
 bot.action('OPT_OUT', async (ctx) => {
+    const user = ctx.callbackQuery.from;
+    const message = ctx.callbackQuery.message;
+
     const [player, game] = await Promise.all([
-        getOrCreatePlayer(ctx.callbackQuery.from.id),
-        getGame(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id)
+        getOrCreatePlayer(user.id, user.first_name, user.last_name, user.username),
+        getGame(message.chat.id, message.message_id)
     ]);
     // TODO: catch and inform user of the error if they can act on it
 

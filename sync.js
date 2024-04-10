@@ -22,8 +22,8 @@ const fibery = new Fibery({
 app.post('/sync-game', async (req, res) => {
     const {gameType, gameId, chatId, messageId, name, limit, participants, reserves} = req.body;
 
-    const message = [
-        `* ${name}*`,
+    const messageText = [
+        `*${name}*`,
         limit ? `*Limit*: ${limit} participants` : null,
         `\n*Participants* \n${participants || '(click ➕ to sign up)'}`,
         reserves ? `\n*Waitlist* \n${reserves}` : null
@@ -36,7 +36,7 @@ app.post('/sync-game', async (req, res) => {
 
     if (!messageId) {
         try {
-            await bot.telegram.sendMessage(chatId, message, {
+            const message = await bot.telegram.sendMessage(chatId, messageText, {
                 parse_mode: 'Markdown',
                 ...keyboard
             });
@@ -68,7 +68,7 @@ app.post('/sync-game', async (req, res) => {
         }
     } else {
         try {
-            await bot.telegram.editMessageText(chatId, messageId, undefined, message, {
+            await bot.telegram.editMessageText(chatId, messageId, undefined, messageText, {
                 parse_mode: 'Markdown',
                 ...keyboard
             });
