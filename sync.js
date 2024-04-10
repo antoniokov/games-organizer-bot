@@ -19,7 +19,7 @@ const fibery = new Fibery({
     token: process.env.FIBERY_TOKEN,
 });
 
-app.post('/sync-game', (req, res) => {
+app.post('/sync-game', async (req, res) => {
     const {gameType, gameId, chatId, messageId, name, limit, participants, reserves} = req.body;
 
     const message = [
@@ -29,50 +29,55 @@ app.post('/sync-game', (req, res) => {
         reserves ? `\n*Waitlist* \n${reserves}` : null
     ].join(`\n`);
 
+    const keyboard = Markup.inlineKeyboard([
+        Markup.button.callback('➕', 'SIGN_UP'),
+        Markup.button.callback('❌', 'OPT_OUT')
+    ]);
+
     if (!messageId) {
-        bot.telegram.sendMessage(chatId, message, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.callback('➕', 'SIGN_UP'),
-                Markup.button.callback('❌', 'OPT_OUT')
-            ])
-        }).then((message) => {
+        try {
+            await bot.telegram.sendMessage(chatId, message, {
+                parse_mode: 'Markdown',
+                ...keyboard
+            });
+
             if (!gameId || !gameType) {
-                res.status(500).send('Either gameId or gameType is missing');
+                res.status(400).send('Either gameId or gameType is missing');
                 return;
             }
 
             const [appName, typeName] = gameType.split('/');
-            fibery.entity.updateBatch([{
-                'type': gameType,
-                'entity': {
-                    'fibery/id': gameId,
-                    [`${appName}/Telegram Message ID`]: message.message_id.toString()
-                }
-            }]).then(() => {
-                res.sendStatus(200);
-            }).catch(err => {
+            try {
+                await fibery.entity.updateBatch([{
+                    'type': gameType,
+                    'entity': {
+                        'fibery/id': gameId,
+                        [`${appName}/Telegram Message ID`]: message.message_id.toString()
+                    }
+                }]);
+            } catch (err) {
                 console.error(err);
                 res.status(500).send('Failed to update the Game in Fibery');
+                return;
+            }
+
+            res.sendStatus(200);
+        } catch (err) {
+            console.error(err);
+            res.status(500).send('Failed to send message to Telegram');
+        }
+    } else {
+        try {
+            await bot.telegram.editMessageText(chatId, messageId, undefined, message, {
+                parse_mode: 'Markdown',
+                ...keyboard
             });
 
-        }).catch(err => {
-            console.log(err);
-            res.status(500).send('Failed to send message');
-        });
-    } else {
-        bot.telegram.editMessageText(chatId, messageId, undefined, message, {
-            parse_mode: 'Markdown',
-            ...Markup.inlineKeyboard([
-                Markup.button.callback('➕', 'SIGN_UP'),
-                Markup.button.callback('❌', 'OPT_OUT')
-            ])
-        }).then(() => {
             res.sendStatus(200);
-        }).catch(err => {
-            console.log(err);
-            res.status(500).send('Failed to edit message');
-        });
+        } catch (err) {
+            console.error(err);
+            res.status(500).send('Failed to edit message in Telegram');
+        }
     }
 });
 
