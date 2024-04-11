@@ -76,7 +76,7 @@ const getGame = async (chatId, messageId) => {
         // TODO: consider using cache if checking for active registrations in Fibery is not necessary
     }
 
-    console.log(`Looking for a Game by Telegram Chat ID (${chatId.toString()}) and Message ID (${messageId.toString()})...`);
+    console.log(`Looking for a Game in Fibery by Telegram Chat ID (${chatId.toString()}) and Message ID (${messageId.toString()})...`);
     const games = await fibery.entity.query({
         'q/from': `${fiberyApp}/Game`,
         'q/select': {
@@ -117,6 +117,8 @@ const getGame = async (chatId, messageId) => {
 
 
 bot.action('SIGN_UP', async (ctx) => {
+    console.log('New sign-up');
+
     const user = ctx.callbackQuery.from;
     const message = ctx.callbackQuery.message;
 
@@ -126,8 +128,13 @@ bot.action('SIGN_UP', async (ctx) => {
             getGame(message.chat.id, message.message_id)
         ]);
 
-        const isRegistered = game.activeRegistrations.some(ar => ar.playerId === player.id);
-        if (isRegistered) {
+        const activeRegistrationIds =  game.activeRegistrations
+            .filter(ar => ar.playerId === player.id)
+            .map(ar => ar.id)
+            .join(', ');
+
+        if (activeRegistrationIds) {
+            console.log(`Active Registration(s) for Player ${player.id} found: ${activeRegistrationIds}`);
             return await ctx.answerCbQuery(`You are already signed up 🤷`);
         }
 
@@ -152,6 +159,8 @@ bot.action('SIGN_UP', async (ctx) => {
 
 
 bot.action('OPT_OUT', async (ctx) => {
+    console.log('New opt-out');
+
     const user = ctx.callbackQuery.from;
     const message = ctx.callbackQuery.message;
 
@@ -161,23 +170,25 @@ bot.action('OPT_OUT', async (ctx) => {
             getGame(message.chat.id, message.message_id)
         ]);
 
-        const activeRegistrations =  game.activeRegistrations.filter(ar => ar.playerId === player.id);
+        const activeRegistrationIds =  game.activeRegistrations
+            .filter(ar => ar.playerId === player.id)
+            .map(ar => ar.id);
 
-        if (activeRegistrations.length === 0) {
+        if (activeRegistrationIds.length === 0) {
             console.log(`No active registrations found for Player ${player.id}`);
             return await ctx.answerCbQuery(`You don't have any active registrations 🤷`);
         }
 
         const currentDate = new Date();
-        const updates = activeRegistrations.map(ar => ({
+        const updates = activeRegistrationIds.map(id => ({
             'type': `${fiberyApp}/Registration`,
             'entity': {
-                'fibery/id': ar.id,
+                'fibery/id': id,
                 [`${fiberyApp}/Opted out at`]: currentDate.toISOString()
             }
         }));
 
-        console.log(`Opting out of Registration(s) ${activeRegistrations.map(ar => ar.id).join(', ')}...`);
+        console.log(`Opting out of Registration(s) ${activeRegistrationIds.join(', ')}...`);
         await fibery.entity.updateBatch(updates);
     } catch (err) {
         console.error(err);
