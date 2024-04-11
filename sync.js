@@ -58,6 +58,7 @@ app.post('/sync-game', async (req, res) => {
                 parse_mode: 'Markdown',
                 ...keyboard
             });
+            console.log('Game announced');
 
             if(!game.type) return logAndReturnError(res, 400, `Can't set Message ID in Fibery: game Type is missing`);
             if(!game.id) return logAndReturnError(res, 400, `Can't set Message ID in Fibery: game ID is missing`);
@@ -77,6 +78,7 @@ app.post('/sync-game', async (req, res) => {
                 return logAndReturnError(res, 500, `Failed to update the Game in Fibery: ${err}`);
             }
 
+            console.log('Message ID set');
             return res.sendStatus(200);
         } catch (err) {
             return logAndReturnError(res, 500, `Failed to send message to Telegram: ${err}`);
@@ -89,6 +91,7 @@ app.post('/sync-game', async (req, res) => {
                 ...keyboard
             });
 
+            console.log('Message updated');
             return res.sendStatus(200);
         } catch (err) {
             if (err.message.includes('message is not modified')) {
