@@ -20,8 +20,19 @@ const fibery = new Fibery({
 });
 const fiberyApp = process.env.FIBERY_APP || 'Organizer';
 
+const cache = {
+    players: new Map(),
+    games: new Map()
+};
+
 const getOrCreatePlayer = async (id, firstName, lastName, username) => {
-    console.log(`Looking for a Player by Telegram User ID: ${id.toString()}...`);
+    const cachedPlayer = cache.players.get(id);
+    if (cachedPlayer) {
+        console.log(`Found Player in cache: ${id} → ${cachedPlayer.id}`);
+        return cachedPlayer;
+    }
+
+    console.log(`Looking for a Player in Fibery by Telegram User ID: ${id.toString()}...`);
     const existingPlayers = await fibery.entity.query({
         'q/from': `${fiberyApp}/Player`,
         'q/select': { id: 'fibery/id' },
@@ -34,8 +45,10 @@ const getOrCreatePlayer = async (id, firstName, lastName, username) => {
     }, { '$user_id': id.toString() });
 
     if (existingPlayers.length === 1) {
-        console.log('Player found');
-        return existingPlayers[0];
+        const player = existingPlayers[0];
+        console.log(`Player found: ${player.id}`);
+        cache.players.set(id, player);
+        return player;
     } else {
         console.log('Player not found, creating a new one...');
         const newPlayers = await fibery.entity.createBatch([{
@@ -48,13 +61,21 @@ const getOrCreatePlayer = async (id, firstName, lastName, username) => {
             }
         }]);
 
-        const newPlayerId = newPlayers[0]['fibery/id'];
-        console.log(`Player created: ${newPlayerId}`);
-        return { id: newPlayerId };
+        const player = { id: newPlayers[0]['fibery/id'] };
+        console.log(`Player created: ${player.id}`);
+        cache.players.set(id, player);
+        return player;
     }
 };
 
 const getGame = async (chatId, messageId) => {
+    const cachedGame = cache.games.get(`${chatId}/${messageId}`);
+    if (cachedGame) {
+        console.log(`Found Game in cache: ${chatId}/${messageId} → ${cachedGame.id}`);
+        // return cachedGame;
+        // TODO: consider using cache if checking for active registrations in Fibery is not necessary
+    }
+
     console.log(`Looking for a Game by Telegram Chat ID (${chatId.toString()}) and Message ID (${messageId.toString()})...`);
     const games = await fibery.entity.query({
         'q/from': `${fiberyApp}/Game`,
@@ -88,6 +109,9 @@ const getGame = async (chatId, messageId) => {
         throw new Error('Game not found in Fibery');
     }
 
+    const game = games[0];
+    console.log(`Game found: ${game.id}`);
+    cache.games.set(`${chatId}/${messageId}`, game);
     return games[0];
 }
 
