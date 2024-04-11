@@ -10,13 +10,13 @@ if (!botToken) {
 
 const bot = new Telegraf(botToken);
 
-if(!process.env.FIBERY_HOST || !process.env.FIBERY_TOKEN) {
-    throw new Error('Please provide FIBERY_HOST and FIBERY_TOKEN in .env file');
+if(!process.env.FIBERY_HOST || !process.env.FIBERY_UI_TOKEN) {
+    throw new Error('Please provide FIBERY_HOST and FIBERY_UI_TOKEN in .env file');
 }
 
 const fibery = new Fibery({
     host: process.env.FIBERY_HOST,
-    token: process.env.FIBERY_TOKEN,
+    token: process.env.FIBERY_UI_TOKEN,
 });
 const fiberyApp = process.env.FIBERY_APP || 'Organizer';
 
@@ -108,7 +108,8 @@ bot.action('SIGN_UP', async (ctx) => {
         }
 
         const currentDate = new Date();
-        const newRegistration = await fibery.entity.createBatch([{
+        console.log(`Signing up Player ${player.id} for Game ${game.id}...`);
+        await fibery.entity.createBatch([{
             'type': `${fiberyApp}/Registration`,
             'entity': {
                 [`${fiberyApp}/Game`]: { 'fibery/id': game.id },
@@ -121,6 +122,7 @@ bot.action('SIGN_UP', async (ctx) => {
         return await ctx.answerCbQuery(`Something went wrong 😬\n${err}`);
     }
 
+    console.log(`Signed up successfully`);
     return await ctx.answerCbQuery(`You've signed up 👌`);
 });
 
@@ -138,6 +140,7 @@ bot.action('OPT_OUT', async (ctx) => {
         const activeRegistrations =  game.activeRegistrations.filter(ar => ar.playerId === player.id);
 
         if (activeRegistrations.length === 0) {
+            console.log(`No active registrations found for Player ${player.id}`);
             return await ctx.answerCbQuery(`You don't have any active registrations 🤷`);
         }
 
@@ -150,12 +153,14 @@ bot.action('OPT_OUT', async (ctx) => {
             }
         }));
 
+        console.log(`Opting out of Registration(s) ${activeRegistrations.map(ar => ar.id).join(', ')}...`);
         await fibery.entity.updateBatch(updates);
     } catch (err) {
         console.error(err);
         return await ctx.answerCbQuery(`Something went wrong 😬\n${err}`);
     }
 
+    console.log('Opted out successfully');
     return await ctx.answerCbQuery(`You've opted out 👌`);
 });
 

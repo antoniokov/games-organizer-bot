@@ -16,7 +16,7 @@ const bot = new Telegraf(botToken);
 
 const fibery = new Fibery({
     host: process.env.FIBERY_HOST,
-    token: process.env.FIBERY_TOKEN,
+    token: process.env.FIBERY_SYNC_TOKEN,
 });
 
 const logAndReturnError = (res, code, error) => {
@@ -53,6 +53,7 @@ app.post('/sync-game', async (req, res) => {
 
     if (!telegram.messageId) {
         try {
+            console.log(`Announcing the Game in Telegram, chat ${telegram.chatId}...`);
             const message = await bot.telegram.sendMessage(telegram.chatId, messageText, {
                 parse_mode: 'Markdown',
                 ...keyboard
@@ -63,30 +64,38 @@ app.post('/sync-game', async (req, res) => {
 
             const [appName, typeName] = game.type.split('/');
             try {
+                const messageId = message.message_id.toString();
+                console.log(`Setting Message ID to ${messageId} for the Game in Fibery...`);
                 await fibery.entity.updateBatch([{
                     'type': game.type,
                     'entity': {
                         'fibery/id': game.id,
-                        [`${appName}/Telegram Message ID`]: message.message_id.toString()
+                        [`${appName}/Telegram Message ID`]: messageId
                     }
                 }]);
             } catch (err) {
                 return logAndReturnError(res, 500, `Failed to update the Game in Fibery: ${err}`);
             }
 
-            res.sendStatus(200);
+            return res.sendStatus(200);
         } catch (err) {
             return logAndReturnError(res, 500, `Failed to send message to Telegram: ${err}`);
         }
     } else {
         try {
+            console.log(`Updating the message ${telegram.messageId} in chat ${telegram.chatId}...`);
             await bot.telegram.editMessageText(telegram.chatId, telegram.messageId, undefined, messageText, {
                 parse_mode: 'Markdown',
                 ...keyboard
             });
 
-            res.sendStatus(200);
+            return res.sendStatus(200);
         } catch (err) {
+            if (err.message.includes('message is not modified')) {
+                console.log('No need to update the message');
+                return res.sendStatus(200);
+            }
+
             return logAndReturnError(res, 500, `Failed to edit message in Telegram: ${err}`);
         }
     }
