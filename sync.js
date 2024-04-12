@@ -2,6 +2,7 @@ import serverlessHttp from 'serverless-http';
 import {Telegraf, Markup} from 'telegraf';
 import express from 'express';
 import Fibery from 'fibery-unofficial';
+import escape from "escape-html";
 
 
 const app = express();
@@ -25,16 +26,16 @@ const logAndReturnError = (res, code, error) => {
 };
 
 const buildMessageText = (game) => {
-    const name = `*${game.name || 'Untitled'}*`;
+    const name = `<b>${game.name || 'Untitled'}</b>`;
 
     const place = game.address && game.googleMapsLink
-        ? `[${game.address}](${game.googleMapsLink})`
+        ? `<a href = "${game.googleMapsLink}">${game.address}</a>`
         : game.address || game.googleMapsLink || null;
 
     const limit = game.limit ? ` (max. ${game.limit})` : '';
-    const participantsHeader = `\n*Participants*${limit}:`;
-    const participants = `${game.participants || '(click ➕ to sign up)'}`;
-    const waitlist = game.reserves ? `\n*Waitlist* \n${game.reserves}` : null;
+    const participantsHeader = `\n<b>Participants</b>${limit}:`;
+    const participants = `${escape(game.participants) || '(click ➕ to sign up)'}`;
+    const waitlist = game.reserves ? `\n<b>Waitlist</b> \n${escape(game.reserves)}` : null;
 
     return [name, place, participantsHeader, participants, waitlist].filter(Boolean).join(`\n`);
 };
@@ -55,7 +56,7 @@ app.post('/sync-game', async (req, res) => {
         try {
             console.log(`Announcing the Game in Telegram, chat ${telegram.chatId}...`);
             const message = await bot.telegram.sendMessage(telegram.chatId, messageText, {
-                parse_mode: 'Markdown',
+                parse_mode: 'HTML',
                 ...keyboard
             });
             console.log('Game announced');
@@ -87,7 +88,7 @@ app.post('/sync-game', async (req, res) => {
         try {
             console.log(`Updating the message ${telegram.messageId} in chat ${telegram.chatId}...`);
             await bot.telegram.editMessageText(telegram.chatId, telegram.messageId, undefined, messageText, {
-                parse_mode: 'Markdown',
+                parse_mode: 'HTML',
                 ...keyboard
             });
 

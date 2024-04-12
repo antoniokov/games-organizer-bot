@@ -1,7 +1,6 @@
 import serverlessHttp from 'serverless-http';
 import { Telegraf } from 'telegraf';
 import Fibery from 'fibery-unofficial';
-import * as console from "node:console";
 
 const botToken = process.env.BOT_TOKEN;
 if (!botToken) {
