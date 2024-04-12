@@ -9,6 +9,11 @@ provider:
   name: aws
   runtime: nodejs20.x
   region: eu-central-1
+  stage: ${opt:stage, 'dev'}
+
+custom:
+  dotenv:
+    path: ./.env.${self:provider.stage}
 
 functions:
   ui:

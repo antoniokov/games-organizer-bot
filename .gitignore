@@ -5,7 +5,7 @@ node_modules
 .serverless
 
 # secrets
-.env
+.env*
 
 # IDE settings
 .idea
