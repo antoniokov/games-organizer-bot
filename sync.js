@@ -25,7 +25,7 @@ const logAndReturnError = (res, code, error) => {
     return res.status(code).send(error);
 };
 
-const buildMessageText = (game) => {
+const buildMessage = (game) => {
     const name = `<b>${game.name || 'Untitled'}</b>`;
 
     const place = game.address && game.googleMapsLink
@@ -34,10 +34,23 @@ const buildMessageText = (game) => {
 
     const limit = game.limit ? ` (max. ${game.limit})` : '';
     const participantsHeader = `\n<b>Participants</b>${limit}:`;
-    const participants = `${escape(game.participants) || '(click ➕ to sign up)'}`;
+    const participants = game.participants ? escape(game.participants) : '(click ➕ to sign up)';
     const waitlist = game.reserves ? `\n<b>Waitlist</b> \n${escape(game.reserves)}` : null;
 
-    return [name, place, participantsHeader, participants, waitlist].filter(Boolean).join(`\n`);
+    const text = [name, place, participantsHeader, participants, waitlist].filter(Boolean).join(`\n`);
+
+    const keyboard = Markup.inlineKeyboard([
+        Markup.button.callback('➕', 'SIGN_UP'),
+        Markup.button.callback('❌', 'OPT_OUT')
+    ]);
+
+    const extra = {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        ...keyboard
+    };
+
+    return [text, extra];
 };
 
 app.post('/sync-game', async (req, res) => {
@@ -46,19 +59,12 @@ app.post('/sync-game', async (req, res) => {
     if(!game) return logAndReturnError(res, 400, 'Game object is missing');
     if(!telegram) return logAndReturnError(res, 400, 'Telegram object is missing');
 
-    const messageText = buildMessageText(game);
-    const keyboard = Markup.inlineKeyboard([
-        Markup.button.callback('➕', 'SIGN_UP'),
-        Markup.button.callback('❌', 'OPT_OUT')
-    ]);
+    const [messageText, messageExtra] = buildMessage(game);
 
     if (!telegram.messageId) {
         try {
             console.log(`Announcing the Game in Telegram, chat ${telegram.chatId}...`);
-            const message = await bot.telegram.sendMessage(telegram.chatId, messageText, {
-                parse_mode: 'HTML',
-                ...keyboard
-            });
+            const message = await bot.telegram.sendMessage(telegram.chatId, messageText, messageExtra);
             console.log('Game announced');
 
             if(!game.type) return logAndReturnError(res, 400, `Can't set Message ID in Fibery: game Type is missing`);
@@ -87,10 +93,7 @@ app.post('/sync-game', async (req, res) => {
     } else {
         try {
             console.log(`Updating the message ${telegram.messageId} in chat ${telegram.chatId}...`);
-            await bot.telegram.editMessageText(telegram.chatId, telegram.messageId, undefined, messageText, {
-                parse_mode: 'HTML',
-                ...keyboard
-            });
+            await bot.telegram.editMessageText(telegram.chatId, telegram.messageId, undefined, messageText, messageExtra);
 
             console.log('Message updated');
             return res.sendStatus(200);
