@@ -35,13 +35,13 @@ const getOrCreatePlayer = async (id, firstName, lastName, username) => {
     const existingPlayers = await fibery.entity.query({
         'q/from': `${fiberyApp}/Player`,
         'q/select': { id: 'fibery/id' },
-        'q/where': ['=', [`${fiberyApp}/Telegram User ID`], '$user_id'],
+        'q/where': ['=', [`${fiberyApp}/Telegram User ID`], '$telegram_user_id'],
         'q/order-by': [
             [['fibery/creation-date'], 'q/asc'],
             [['fibery/rank'], 'q/asc']
         ],
         'q/limit': 1
-    }, { '$user_id': id.toString() });
+    }, { '$telegram_user_id': id.toString() });
 
     if (existingPlayers.length === 1) {
         const player = existingPlayers[0];
