@@ -12,13 +12,12 @@
   },
   "dependencies": {
     "escape-html": "^1.0.3",
-    "express": "^4.19.2",
+    "express": "^5.0.0",
     "fibery-unofficial": "^0.2.1",
-    "serverless-http": "^3.2.0",
+    "serverless-http": "^4.0.0",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
-    "serverless": "^3.28.1",
-    "serverless-dotenv-plugin": "^4.0.2"
+    "serverless": "^4.0.0"
   }
 }

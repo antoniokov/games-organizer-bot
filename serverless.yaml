@@ -1,19 +1,23 @@
+org: antoniokov
+app: games-organizer
 service: games-organizer-bot
-
-frameworkVersion: "3"
 
 package:
   excludeDevDependencies: true
 
+useDotenv: true
+
 provider:
   name: aws
-  runtime: nodejs20.x
+  runtime: nodejs22.x
   region: eu-central-1
   stage: ${opt:stage, 'dev'}
-
-custom:
-  dotenv:
-    path: ./.env.${self:provider.stage}
+  environment:
+    BOT_TOKEN: ${env:BOT_TOKEN}
+    FIBERY_HOST: ${env:FIBERY_HOST}
+    FIBERY_SYNC_TOKEN: ${env:FIBERY_SYNC_TOKEN}
+    FIBERY_UI_TOKEN: ${env:FIBERY_UI_TOKEN}
+    FIBERY_APP: ${env:FIBERY_APP, 'Organizer'}
 
 functions:
   ui:
@@ -28,5 +32,3 @@ functions:
       - http:
           path: /sync-game
           method: post
-plugins:
-  - serverless-dotenv-plugin
