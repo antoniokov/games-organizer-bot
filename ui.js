@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import serverlessHttp from 'serverless-http';
 import { Telegraf } from 'telegraf';
 import Fibery from 'fibery-unofficial';
@@ -24,6 +25,44 @@ const cache = {
     games: new Map()
 };
 
+// Creates an entity unless one with the same Conflict Field value is already there, so that
+// a Telegram redelivery — or another invocation racing this one — can't insert a second row.
+// Both Conflict Fields are unique in Fibery, which is what makes it hold under concurrency.
+const createUnlessDuplicate = async (type, entity, conflictField) => {
+    try {
+        const [result] = await fibery.command.execute({
+            command: 'fibery.entity.batch/create-or-update',
+            args: {
+                type,
+                entities: [{ 'fibery/id': randomUUID(), ...entity }],
+                'conflict-field': conflictField,
+                'conflict-action': 'skip-create'
+            }
+        });
+
+        // On create Fibery returns the new entity, on skip-create the duplicate it found
+        return {
+            id: (result.created || result.duplicate)['fibery/id'],
+            isDuplicate: result.action !== 'create'
+        };
+    } catch (err) {
+        // A Conflict Field with a uniqueness constraint rejects the losing write outright
+        // instead of skipping it, so check whether what we wanted is already there
+        const [existing] = await fibery.entity.query({
+            'q/from': type,
+            'q/select': { id: 'fibery/id' },
+            'q/where': ['=', [conflictField], '$conflict_value'],
+            'q/limit': 1
+        }, { '$conflict_value': entity[conflictField] });
+
+        if (!existing) {
+            throw err;
+        }
+
+        return { id: existing.id, isDuplicate: true };
+    }
+};
+
 const getOrCreatePlayer = async (id, firstName, lastName, username) => {
     const cachedPlayer = cache.players.get(id);
     if (cachedPlayer) {
@@ -32,39 +71,18 @@ const getOrCreatePlayer = async (id, firstName, lastName, username) => {
     }
 
     console.log(`Looking for a Player in Fibery by Telegram User ID: ${id.toString()}...`);
-    const existingPlayers = await fibery.entity.query({
-        'q/from': `${fiberyApp}/Player`,
-        'q/select': { id: 'fibery/id' },
-        'q/where': ['=', [`${fiberyApp}/Telegram User ID`], '$telegram_user_id'],
-        'q/order-by': [
-            [['fibery/creation-date'], 'q/asc'],
-            [['fibery/rank'], 'q/asc']
-        ],
-        'q/limit': 1
-    }, { '$telegram_user_id': id.toString() });
+    const { id: playerId, isDuplicate } = await createUnlessDuplicate(`${fiberyApp}/Player`, {
+        [`${fiberyApp}/Telegram User ID`]: id.toString(),
+        [`${fiberyApp}/First Name (TG)`]: firstName,
+        [`${fiberyApp}/Last Name (TG)`]: lastName,
+        [`${fiberyApp}/Username (TG)`]: username
+    }, `${fiberyApp}/Telegram User ID`);
 
-    if (existingPlayers.length === 1) {
-        const player = existingPlayers[0];
-        console.log(`Player found: ${player.id}`);
-        cache.players.set(id, player);
-        return player;
-    } else {
-        console.log('Player not found, creating a new one...');
-        const newPlayers = await fibery.entity.createBatch([{
-            'type': `${fiberyApp}/Player`,
-            'entity': {
-                [`${fiberyApp}/Telegram User ID`]: id.toString(),
-                [`${fiberyApp}/First Name (TG)`]: firstName,
-                [`${fiberyApp}/Last Name (TG)`]: lastName,
-                [`${fiberyApp}/Username (TG)`]: username
-            }
-        }]);
+    console.log(isDuplicate ? `Player found: ${playerId}` : `Player created: ${playerId}`);
 
-        const player = { id: newPlayers[0]['fibery/id'] };
-        console.log(`Player created: ${player.id}`);
-        cache.players.set(id, player);
-        return player;
-    }
+    const player = { id: playerId };
+    cache.players.set(id, player);
+    return player;
 };
 
 const getGame = async (chatId, messageId) => {
@@ -137,16 +155,22 @@ bot.action('SIGN_UP', async (ctx) => {
             return await ctx.answerCbQuery(`You are already signed up 🤷`);
         }
 
+        // Telegram redelivers an update until it gets a 200, always with the same callback
+        // query id, so keying the Registration on it makes a redelivery a no-op. Two
+        // genuinely simultaneous taps carry different ids and can still both land — rare,
+        // and opting out clears every active Registration, so it's recoverable.
         const currentDate = new Date();
         console.log(`Signing up Player ${player.id} for Game ${game.id}...`);
-        await fibery.entity.createBatch([{
-            'type': `${fiberyApp}/Registration`,
-            'entity': {
-                [`${fiberyApp}/Game`]: { 'fibery/id': game.id },
-                [`${fiberyApp}/Player`]: { 'fibery/id': player.id },
-                [`${fiberyApp}/Signed up at`]: currentDate.toISOString(),
-            }
-        }]);
+        const registration = await createUnlessDuplicate(`${fiberyApp}/Registration`, {
+            [`${fiberyApp}/Game`]: { 'fibery/id': game.id },
+            [`${fiberyApp}/Player`]: { 'fibery/id': player.id },
+            [`${fiberyApp}/Signed up at`]: currentDate.toISOString(),
+            [`${fiberyApp}/Telegram Callback Query ID`]: ctx.callbackQuery.id
+        }, `${fiberyApp}/Telegram Callback Query ID`);
+
+        if (registration.isDuplicate) {
+            console.log(`Registration ${registration.id} for this tap is already there — Telegram redelivered it`);
+        }
     } catch (err) {
         console.error(err);
         return await ctx.answerCbQuery(`Something went wrong 😬\n${err}`);
