@@ -18,6 +18,15 @@ provider:
     FIBERY_SYNC_TOKEN: ${env:FIBERY_SYNC_TOKEN}
     FIBERY_UI_TOKEN: ${env:FIBERY_UI_TOKEN}
     FIBERY_APP: ${env:FIBERY_APP, 'Organizer'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:TagResource
+          Resource:
+            - arn:aws:logs:${aws:region}:${aws:accountId}:log-group:/aws/lambda/${self:service}-${sls:stage}*
 
 functions:
   ui:
